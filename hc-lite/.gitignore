@@ -1,0 +1,4 @@
+.ebin.native
+.eqc-info
+ebin/*.beam
+eqc-test-data-dir

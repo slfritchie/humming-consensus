@@ -1,0 +1,14 @@
+{application, hcl,
+ [
+  {description, "An Erlang hcl library"},
+  {vsn, "1"},
+  {modules, [
+             hcl
+            ]},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {env, []}
+ ]}.
