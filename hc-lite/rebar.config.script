@@ -1,0 +1,39 @@
+PulseBuild = case os:getenv("USE_PULSE") of
+                 false ->
+                     false;
+                 _ ->
+                     true
+             end,
+case PulseBuild of
+    true ->
+        PulseOpts =
+            [{pulse_no_side_effect,[{erlang,display,1}]},
+             {pulse_side_effect,
+              [   {bitcask_nifs, '_', '_'}
+
+                , {bitcask_file, '_', '_'}
+                %% , {bitcask_time, tstamp, 0}
+
+                %% , {prim_file, '_', '_'}
+                %% , {file, '_', '_'}
+                %% , {filelib, '_', '_'}
+                %% , {os, '_', '_'}
+              ]},
+
+             {pulse_replace_module,
+              [ {gen_server, pulse_gen_server}
+                , {application, pulse_application}
+                , {supervisor, pulse_supervisor} ]}
+            ],
+        UpdConfig = case lists:keysearch(eunit_compile_opts, 1, CONFIG) of
+                        {value, {eunit_compile_opts, Opts}} ->
+                            lists:keyreplace(eunit_compile_opts,
+                                             1,
+                                             CONFIG,
+                                             {eunit_compile_opts, Opts ++ PulseOpts});
+                        _ ->
+                            [{eunit_compile_opts, PulseOpts} | CONFIG]
+                    end;
+false ->
+    CONFIG
+end.
