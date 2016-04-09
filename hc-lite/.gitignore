@@ -2,3 +2,6 @@
 .eqc-info
 ebin/*.beam
 eqc-test-data-dir
+.eunit
+.rebar
+deps
