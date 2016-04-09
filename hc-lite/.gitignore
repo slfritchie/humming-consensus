@@ -1,7 +1,9 @@
 .ebin.native
 .eqc-info
 ebin/*.beam
+ebin/*.app
 eqc-test-data-dir
 .eunit
 .rebar
 deps
+current_counterexample.eqc

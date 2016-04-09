@@ -24,7 +24,8 @@
 -export([start_link/2, stop/1,
          write/4, write/5,
          read/3, read/4,
-         get_latest_epochid/2, get_latest_epochid/3]).
+         get_latest_epochid/2, get_latest_epochid/3,
+         read_latest_config/2, read_latest_config/3]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
@@ -43,19 +44,6 @@ start_link(RegName, DataDir) ->
 
 stop(RegName) ->
     g_call(RegName, {stop}, infinity).
-
-%% @doc Fetch the latest epoch number + checksum for type `COnfigType'.
-%% projection.
-
-get_latest_epochid(PidSpec, ConfigType) ->
-    get_latest_epochid(PidSpec, ConfigType, infinity).
-
-%% @doc Fetch the latest epoch number + checksum for type `COnfigType'.
-%% projection.
-
-get_latest_epochid(PidSpec, ConfigType, Timeout)
-  when ConfigType == 'public' orelse ConfigType == 'private' ->
-    g_call(PidSpec, {get_latest_epochid, ConfigType}, Timeout).
 
 %% @doc Write the projection record type `ConfigType' for epoch number `Epoch' .
 
@@ -80,6 +68,32 @@ read(PidSpec, ConfigType, Epoch, Timeout)
   when ConfigType == 'public' orelse ConfigType == 'private',
        is_integer(Epoch), Epoch > 0 ->
     g_call(PidSpec, {read, ConfigType, Epoch}, Timeout).
+
+%% @doc Fetch the latest epoch number + checksum for type `ConfigType'.
+%% projection.
+
+get_latest_epochid(PidSpec, ConfigType) ->
+    get_latest_epochid(PidSpec, ConfigType, infinity).
+
+%% @doc Fetch the latest epoch + checksum for type `ConfigType'.
+%% projection.
+
+get_latest_epochid(PidSpec, ConfigType, Timeout)
+  when ConfigType == 'public' orelse ConfigType == 'private' ->
+    g_call(PidSpec, {get_latest_epochid, ConfigType}, Timeout).
+
+%% @doc Fetch the latest epoch + config for type `ConfigType'.
+%% projection.
+
+read_latest_config(PidSpec, ConfigType) ->
+    read_latest_config(PidSpec, ConfigType, infinity).
+
+%% @doc Fetch the latest epoch number + checksum for type `ConfigType'.
+%% projection.
+
+read_latest_config(PidSpec, ConfigType, Timeout)
+  when ConfigType == 'public' orelse ConfigType == 'private' ->
+    g_call(PidSpec, {read_latest_config, ConfigType}, Timeout).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -115,6 +129,18 @@ handle_call({{get_latest_epochid, ConfigType}, LC1}, _From, S) ->
                  ConfigType == private -> S#state.max_private_epochid
              end,
     {reply, {{ok, EpochId}, LC2}, S};
+handle_call({{read_latest_config, ConfigType}, LC1}, _From, S) ->
+    LC2 = lclock_update(LC1),
+    EpochId = if ConfigType == public  -> S#state.max_public_epochid;
+                 ConfigType == private -> S#state.max_private_epochid
+             end,
+    Reply = if EpochId == -1 ->
+                    not_written;
+               true ->
+                    {{ok, Config}, _S} = do_read(ConfigType, EpochId, S),
+                    {ok, EpochId, Config}
+            end,
+    {reply, {Reply, LC2}, S};
 handle_call({{write, ConfigType, Epoch, Config}, LC1}, _From, S) ->
     LC2 = lclock_update(LC1),
     {Reply, S2} = do_write(ConfigType, Epoch, Config, S),

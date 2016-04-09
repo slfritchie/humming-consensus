@@ -91,6 +91,7 @@ initial_state(Name) ->
 weight(_S, write)               ->  4;
 weight(_S, read)                ->  4;
 weight(_S, get_latest_epochid)  ->  4;
+weight(_S, read_latest_config)  ->  4;
 weight(_S, _)                   ->  1.
 
 gen_config() ->
@@ -111,7 +112,6 @@ start_args(#state{name=Name}) ->
     [Name].
 
 start(Name) ->
-    io:format(user, "S", []),
     {ok, Pid} = ?MUT:start_link(Name, ?TESTDIR),
     Pid.
 
@@ -125,8 +125,9 @@ stop_args(#state{name=Name}) ->
     [Name].
 
 stop(Name) ->
-    io:format(user, "s", []),
-    ok = ?MUT:stop(Name).
+    ok = ?MUT:stop(Name),
+    %% Damn delayed/async registered name cleanup.
+    timer:sleep(1).
 
 stop_next(S, _Res, _) ->
     S#state{pid=undefined}.
@@ -141,7 +142,6 @@ write_args(#state{name=Name}) ->
     [Name, ConfigType, Epoch, Config].
 
 write(Name, ConfigType, Epoch, Config) ->
-    io:format(user, "w", []),
     ?MUT:write(Name, ConfigType, Epoch, Config).
 
 write_post(S, [Name, ConfigType, Epoch, _Config], ok) ->
@@ -166,7 +166,6 @@ read_args(#state{name=Name}) ->
     [Name, ConfigType, Epoch].
 
 read(Name, ConfigType, Epoch) ->
-    io:format(user, "r", []),
     ?MUT:read(Name, ConfigType, Epoch).
 
 read_post(S, [Name, ConfigType, Epoch], {ok, V}) ->
@@ -175,7 +174,7 @@ read_post(S, [Name, ConfigType, Epoch], {ok, V}) ->
 read_post(S, [Name, ConfigType, Epoch], not_written) ->
     not is_written(S, Name, ConfigType, Epoch).
 
-read_next(S = #state{}, _Val, [Name, ConfigType, Epoch]) ->
+read_next(S = #state{}, _Val, [_Name, _ConfigType, _Epoch]) ->
     S.
 
 get_latest_epochid_pre(#state{pid=Pid}) ->
@@ -186,15 +185,33 @@ get_latest_epochid_args(#state{name=Name}) ->
     [Name, ConfigType].
 
 get_latest_epochid(Name, ConfigType) ->
-    io:format(user, "g", []),
     ?MUT:get_latest_epochid(Name, ConfigType).
 
 get_latest_epochid_post(S, [Name, ConfigType], {ok, -1}) ->
-    [] == get_written_epochs(S, ConfigType);
+    [] == get_written_epochs(S, Name, ConfigType);
 get_latest_epochid_post(S, [Name, ConfigType], {ok, Epoch}) ->
-    lists:max(get_written_epochs(S, ConfigType)) == Epoch.
+    lists:max(get_written_epochs(S, Name, ConfigType)) == Epoch.
 
-get_latest_epochid_next(S = #state{}, _Val, [Name, ConfigType]) ->
+get_latest_epochid_next(S = #state{}, _Val, [_Name, _ConfigType]) ->
+    S.
+
+read_latest_config_pre(#state{pid=Pid}) ->
+    Pid /= undefined.
+
+read_latest_config_args(#state{name=Name}) ->
+    ConfigType = gen_priv_pub(),
+    [Name, ConfigType].
+
+read_latest_config(Name, ConfigType) ->
+    ?MUT:read_latest_config(Name, ConfigType).
+
+read_latest_config_post(S, [Name, ConfigType], not_written) ->
+    [] == get_written_epochs(S, Name, ConfigType);
+read_latest_config_post(S, [Name, ConfigType], {ok, Epoch, Config}) ->
+    lists:max(get_written_epochs(S, Name, ConfigType)) == Epoch andalso
+        get_value(S, Name, ConfigType, Epoch) == Config.
+
+read_latest_config_next(S = #state{}, _Val, [_Name, _ConfigType]) ->
     S.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -205,10 +222,10 @@ is_written(#state{dict=D}, Name, ConfigType, Epoch) ->
 get_value(#state{dict=D}, Name, ConfigType, Epoch) ->
     dict:fetch({Name, ConfigType, Epoch}, D).
 
-get_written_epochs(#state{dict=D}, ConfigType) ->
+get_written_epochs(#state{dict=D}, Name, ConfigType) ->
     lists:sort([Epoch ||
-                   {{_Name, CT, Epoch}, _Val} <- dict:to_list(D),
-                   CT == ConfigType]).
+                   {{Nm, CT, Epoch}, _Val} <- dict:to_list(D),
+                   Nm == Name, CT == ConfigType]).
 
 dict_add(S = #state{dict=D}, Name, ConfigType, Epoch, Val) ->
     S#state{dict=dict:store({Name, ConfigType, Epoch}, Val, D)}.
