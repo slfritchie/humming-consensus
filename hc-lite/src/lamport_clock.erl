@@ -23,9 +23,14 @@
 
 -export([init/0, reset/0, get/0, update/1, incr/0]).
 
+-ifdef(PULSE).
+-compile({parse_transform, pulse_instrument}).
+-endif. % PULSE
+
 -define(KEY, ?MODULE).
 
--ifdef(TEST).
+-ifndef(TEST).
+%% -ifdef(TEST).
 
 init() ->
     case get(?KEY) of

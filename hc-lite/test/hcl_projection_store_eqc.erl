@@ -34,6 +34,19 @@
 -define(MUT, hcl_projection_store).             % Module Under Test
 -define(TESTDIR, "./eqc-test-data-dir").
 
+-ifdef(PULSE).
+-include("/Users/fritchie/lib/eqc/include/pulse_otp.hrl").
+-compile({pulse_replace_module, [{gen_server, pulse_gen_server}]}).
+-compile({parse_transform, pulse_instrument}).
+%% The following functions contains side_effects but are run outside
+%% PULSE, i.e. PULSE needs to leave them alone
+-compile({pulse_skip,[{eqc_test_,0}, {cleanup,0}, {cleanup_stop,0}]}).
+-compile({pulse_no_side_effect,[{file,'_','_'},
+                                %% {erlang, now, 0},
+                                {filelib,'_','_'}
+                               ]}).
+-endif. % PULSE
+
 -record(state, {
           name             :: atom(),
           pid              :: 'undefined' | pid(),
@@ -43,7 +56,7 @@
 %% EUNIT TEST DEFINITION
 eqc_test_() ->
     PropTimeout = case os:getenv("EQC_TIME") of
-                      false -> 1;
+                      false -> 5;
                       V     -> list_to_integer(V)
                   end,
     {timeout, PropTimeout*2 + 30,
@@ -74,13 +87,19 @@ prop_ok() ->
     Name = sut,
     catch cleanup_stop(Name),
     cleanup(),
+    pulse_start_maybe(),
     ?FORALL(Cmds, parallel_commands(?MODULE, initial_state(Name)),
             begin
-                {H, PH, Res} = run_parallel_commands(?MODULE, Cmds),
-                catch cleanup_stop(Name),
-                cleanup(),
-                pretty_commands(?MODULE, Cmds, {H, PH, Res},
-                                aggregate(command_names(Cmds), Res == ok))
+                F = fun() ->
+                            pulse_verbose_perhaps([procs]),
+                            {H, PH, Res} = run_parallel_commands(?MODULE, Cmds),
+                            catch cleanup_stop(Name),
+                            cleanup(),
+                            pretty_commands(?MODULE, Cmds, {H, PH, Res},
+                                            aggregate(command_names(Cmds),
+                                                      Res == ok))
+                    end,
+                run_pulse_maybe(F)
             end).
 
 %% GENERATORS etc
@@ -235,7 +254,33 @@ cleanup() ->
     ok.
 
 cleanup_stop(Name) ->
-    stop(Name).
+    catch (Name ! stop),
+    erlang:yield().
+    %% stop(Name).
+
+-ifdef(PULSE).
+
+pulse_start_maybe() ->
+    pulse:start().
+
+run_pulse_maybe(Fun) ->
+    pulse:run(Fun).
+
+pulse_verbose_perhaps(L) ->
+    pulse:verbose(L).
+
+-else.
+
+pulse_start_maybe() ->
+    ok.
+
+run_pulse_maybe(Fun) ->
+    Fun().
+
+pulse_verbose_perhaps(_) ->
+    ok.
+
+-endif. % PULSE
 
 -endif. % EQC
 -endif. % TEST

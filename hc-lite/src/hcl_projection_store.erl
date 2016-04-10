@@ -29,6 +29,16 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+-ifdef(PULSE).
+-compile({parse_transform, pulse_instrument}).
+-include("/Users/fritchie/lib/eqc/include/pulse_otp.hrl").
+-compile({pulse_replace_module, [{gen_server, pulse_gen_server}]}).
+-compile({pulse_side_effect, [
+                              {lamport_clock,'_','_'},
+                              {gen_server,call,'_'}
+                             ]}).
+-endif. % PULSE
+
 -behavior(gen_server).
 
 -record(state, {
@@ -156,6 +166,8 @@ handle_call({{stop}, LC1}, _From, State) ->
 handle_cast(_Msg, S) ->
     {noreply, S}.
 
+handle_info(stop, S) ->
+    {stop, normal, S};
 handle_info(_Info, S) ->
     {noreply, S}.
 
@@ -212,7 +224,6 @@ g_call(PidSpec, Arg, Timeout) ->
     Res.
 
 %%-ifdef(TEST).
--ifndef(TEST).
 
 lclock_init() ->
     lamport_clock:init().
@@ -235,19 +246,19 @@ lclock_update(LC) ->
 %%             ok
 %%     end.
 
--else.  % TEST
+%% -else.  % TEST
 
-lclock_init() ->
-    ok.
-
-lclock_get() ->
-    ok.
-
-lclock_update(_LC) ->
-    ok.
-
-%% testing_sleep_perhaps() ->
+%% lclock_init() ->
 %%     ok.
 
--endif. % TEST
+%% lclock_get() ->
+%%     ok.
+
+%% lclock_update(_LC) ->
+%%     ok.
+
+%% %% testing_sleep_perhaps() ->
+%% %%     ok.
+
+%% -endif. % TEST
 

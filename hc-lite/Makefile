@@ -29,7 +29,20 @@ edoc: edoc-clean
 edoc-clean:
 	rm -f edoc/*.png edoc/*.html edoc/*.css edoc/edoc-info
 
-pulse: compile
-	@echo Sorry, PULSE tests not available yet
+PULSE_TESTS = hcl_projection_store_eqc
+
+pulse:
+	@rm -rf $(BASE_DIR)/.eunit
+	BITCASK_PULSE=1 $(REBAR) clean compile
+	env USE_PULSE=1 $(REBAR) -D PULSE eunit skip_deps=true suites=$(PULSE_TESTS) ; \
+	if [ $$? -ne 0 ]; then \
+		echo PULSE test FAILED; \
+		cp ./.eunit/current_counterexample.eqc $(COUNTER); \
+		cp ./.eunit/.eqc-info $(EQCINFO); \
+		echo See files $(COUNTER) and $(EQCINFO); \
+		exit 1; \
+	else \
+		exit 0; \
+	fi
 
 include tools.mk
