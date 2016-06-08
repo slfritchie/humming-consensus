@@ -90,6 +90,7 @@ prop_ok() ->
     pulse_start_maybe(),
     ?FORALL(Cmds, parallel_commands(?MODULE, initial_state(Name)),
             begin
+                %% io:format(user, "Cmds: ~p\n", [Cmds]),
                 F = fun() ->
                             pulse_verbose_perhaps([procs]),
                             {H, PH, Res} = run_parallel_commands(?MODULE, Cmds),

@@ -87,21 +87,53 @@
 %%    participant name `foo', we will assume that foo's projection store
 %%    name is `foo_pstore'.
 
--record(config_w, {
-          %% Epoch number for this configuration.
-          epoch             :: non_neg_integer(),
+-include("hcl_manager.hrl").
 
-          participants = [] :: list(Participant_Name::atom()),
-          opaque            :: term()
-         }).
+new_flap_history() ->
+    [].                                         % TODO
 
-iterate_once(_MyName, C_cur, _Flap_Hist) ->
-    #config_w{epoch=_E_cur, participants=P_cur} = C_cur,
-    {_C_all_latest, _P_partition} = get_latest_projections(P_cur).
+new_config(InitialParticipants) ->
+    #config_w{epoch=0,
+              participants=InitialParticipants}.
+
+iterate_once(MyName, #config_w{} = C_cur, _Flap_Hist) ->
+    #config_w{epoch=_E_cur, participants=Ps_cur} = C_cur,
+    {_Unanimous_p, _C_latest,
+     _Ps_need_repair, _Ps_down} = get_latest_config(MyName, Ps_cur).
     %% TODO Left off here.
 
-get_latest_projections(_Ps) ->
-    {x,x}.
+get_latest_config(MyName, Ps) ->
+    TODO_partitions = [],
+    TODO_timeout = 5*1000,
+    Rs = [{P, perhaps_call(MyName, P, TODO_partitions,
+                           fun(Tgt) -> hcl_projection_store:read_latest_config(
+                                         proj_store_name(Tgt), public,
+                                         TODO_timeout)
+                           end)} || P <- Ps],
+    classify_latest_projections(Rs, Ps).
+
+classify_latest_projections(Rs, Ps) ->
+    Es = lists:usort([C#config_w.epoch || {_P, {ok, C}} <- Rs]),
+    Ps_down = [P || {P, {error, _}} <- Rs],
+    if Es == [] ->
+            {false, undefined, Ps -- Ps_down, Ps_down};
+       true ->
+            MaxE = lists:max(Es),
+            %% It doesn't matter which config @ MaxE that we choose;
+            %% unanimity or not is more important.
+            C_max = hd([C || {_P, {ok, C}} <- Rs, C#config_w.epoch == MaxE]),
+            Ps_need_repair = [P || {P, not_written} <- Rs],
+            Unanimous_p = case [C || {_P, {ok, C}} <- Rs,
+                                     C#config_w.epoch == MaxE,
+                                     C /= C_max] of
+                              [] ->
+                                  Ps_need_repair == [];
+                              _ ->
+                                  false
+                          end,
+            Ps_need_repair = [P || {P, not_written} <- Rs],
+            {Unanimous_p, C_max, Ps_need_repair, Ps_down}
+    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

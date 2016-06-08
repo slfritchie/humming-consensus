@@ -213,6 +213,14 @@ do_read(ConfigType, Epoch, S = #state{dets=Dets}) ->
             {error, S};
         [] ->
             {not_written, S};
+%%             case {dets:member(Dets, {public,2}),
+%%                   dets:member(Dets, {public,3}),
+%%                   dets:member(Dets, {public,5})} of
+%%                 {true, true, true} ->
+%%                     {{ok,fake_bug}, S};
+%%                 _ ->
+%%                     {not_written, S}
+%%             end;
         [{_, Val}] ->
             {{ok, Val}, S}
     end.
